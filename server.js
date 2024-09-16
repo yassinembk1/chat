@@ -1,7 +1,7 @@
 const express = require("express");
 const multer = require('multer');
 const Chat = require("./models/Chat");
-const User = require("./models/user");
+const User = require("./models/User");
 const Post=require('./models/Posts');
 const Comments=require('./models/Comments');
 const Notifications=require('./models/Notifications');
