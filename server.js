@@ -502,6 +502,18 @@ app.get('/api/chatting/:id', isAuth, async (req, res) => {
 
 
 
+app.get('/api/followers',isAuth, async (req, res) => {
+  const id = req.session.user._id;
+  try{
+    const resp = await User.findOne({ _id: id }).populate('friends');
+    //console.log(resp.friends);
+    res.status(200).json(resp.friends);
+  }catch(err){
+    console.log(err);
+    res.status(500).json({ mssg: "Server error" });
+  }
+})
+
 
 
 
