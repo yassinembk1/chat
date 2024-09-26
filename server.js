@@ -514,6 +514,38 @@ app.get('/api/followers',isAuth, async (req, res) => {
   }
 })
 
+app.get('/api/myposts',isAuth, async (req, res) => {
+  
+    try {
+      const userId = req.session.user._id;
+  
+      // Fetch posts from the currently authenticated user
+      const userPosts = await Post.find({ user: userId })
+        .populate('user', 'fullname profilepic') // Populate user details for the post
+        .populate({
+          path: 'comments', // Populate the comments array
+          populate: {
+            path: 'user', // Populate the user details for each comment
+            select: 'fullname profilepic' // Select fields from the user
+          }
+        });
+  
+      const sortedPosts = userPosts
+        .map(post => ({
+          ...post.toObject(),
+          date: post.date ? new Date(post.date) : new Date() // Convert date to Date object
+        }))
+        .sort((a, b) => b.date - a.date); // Sort by date in descending order
+  
+      // Send the sorted posts as a JSON response
+      res.status(200).json({ posts: sortedPosts });
+    } catch (error) {
+      console.error("An error occurred while fetching posts:", error);
+      res.status(500).json({ message: "An error occurred while fetching posts." });
+    }
+
+  
+});
 
 
 
