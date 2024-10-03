@@ -30,7 +30,6 @@ const store = new MongoDBSession({
 });
 
 
-
 // Middlewares
 
 app.use(express.json({ limit: '50mb' })); // Augmenter la limite à 50MB
