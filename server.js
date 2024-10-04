@@ -565,36 +565,37 @@ app.get('/api/friends',isAuth, async (req, res) => {
 
 });
 
-app.get('/api/profile/:id',isAuth, async (req, res) => {
+app.get('/api/profile/:id', isAuth, async (req, res) => {
   const userid = req.session.user._id;
-  const id= req.params.id
+  const id = req.params.id;
 
-  //console.log(id)
-try{
-  const r = await User.findById(id);  // Find the user by the ID
-  const name=r.fullname;
-  const nposts = r.posts.length;
-  const nfriends = r.friends.length;
-  const pic = r.profilepic.url;
-  
-  if (!r) {
-    return res.status(404).json({ mssg: "User not found" });
+  try {
+    // Find the user by ID and handle if not found
+    const r = await User.findById(id);
+    if (!r) {
+      return res.status(404).json({ mssg: "User not found" });
+    }
+    
+    // Extract user data
+    const name = r.fullname;
+    const nposts = r.posts.length;
+    const nfriends = r.friends.length;
+    const pic = r.profilepic.url;
+    const isme = id === userid;
+    const isFriend = r.friends.includes(userid);
+
+    // Construct the response object
+    const response = { isFriend, name, pic, nposts, nfriends, isme };
+console.log(response)
+    // Send the response
+    res.status(200).json(response);
+    
+  } catch (err) {
+    console.error("Server error:", err);
+    res.status(500).json({ mssg: "Server error" });
   }
-  if(r.friends.includes(userid)){
-    const n = {...r, isFriend:true,name:name,pic:pic,nposts:nposts,nfriends:nfriends}
-    res.status(200).json(n);
-  }
-  else{
-    const n = {...r, isFriend:false,name:name,pic:pic,nposts:nposts,nfriends:nfriends}
-    res.status(200).json(n);
-  }
-  
-}  
-catch (err) {
-  console.log(err);
-  res.status(500).json({ mssg: "Server error" });
-}
-})
+});
+
 
 app.get('/api/getid',isAuth, async (req, res) => {
   const id = req.session.user._id;
@@ -613,10 +614,62 @@ app.get('/api/followersof/:id',isAuth, async (req, res) => {
   }
 })
 
-app.get('*', (req, res) => {
+
+
+
+
+
+app.post("/api/follow/:id",isAuth , async (req, res) => {
+  const id = req.params.id;
+  const status = req.body.follow;
+  try {
+    if(status){
+      await User.updateOne({ _id: id }, { $push: { friendrequests: req.session.user._id } });
+    }
+    res.status(200).json({ mssg: "friend request sent" });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ mssg: "Server error" });
+  }
+
+
+})
+app.post('/api/followuser/:id', isAuth, async (req, res) => {
+  const friend = req.params.id;
+  const userid = req.session.user._id; // ID of the currently authenticated user
+
+  try {
+    // Find the user to whom the friend request is being sent
+    const userTo = await User.findOne({ _id: friend });
+    if (!userTo) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    // Update the friend's document by adding the current user's ID to their friend requests
+    const updateRes = await User.updateOne({ _id: friend }, { $push: { friendrequests: userid } });
+    console.log(updateRes);
+
+    // Create a notification for the friend request
+    const notification = await Notifications.create({ 
+      sender: userid, 
+      receiver: friend, 
+      type: "follow", 
+      message: "sent you a friend request." 
+    });
+
+    // Respond with success
+    res.status(200).json({ message: "Friend request sent successfully." });
+
+  } catch (error) {
+    console.error("Error processing friend request:", error);
+    res.status(500).json({ message: "Server error." });
+  }
+});
+
+
+app.get('*',(req, res) => {
   res.sendFile(path.join(__dirname, 'build', 'index.html'));
 })
-
 // Connexion à la base de données et démarrage du serveur
 mongoose
   .connect(mongoURI, {
