@@ -501,8 +501,8 @@ app.get('/api/chatting/:id', isAuth, async (req, res) => {
 
 
 
-app.get('/api/followers',isAuth, async (req, res) => {
-  const id = req.session.user._id;
+app.get('/api/followers/:id',isAuth, async (req, res) => {
+  const id = req.params.id;
   try{
     const resp = await User.findOne({ _id: id }).populate('friends');
     //console.log(resp.friends);
@@ -564,6 +564,53 @@ app.get('/api/friends',isAuth, async (req, res) => {
 
 });
 
+app.get('/api/profile/:id',isAuth, async (req, res) => {
+  const userid = req.session.user._id;
+  const id= req.params.id
+
+  //console.log(id)
+try{
+  const r = await User.findById(id);  // Find the user by the ID
+  const name=r.fullname;
+  const nposts = r.posts.length;
+  const nfriends = r.friends.length;
+  const pic = r.profilepic.url;
+  
+  if (!r) {
+    return res.status(404).json({ mssg: "User not found" });
+  }
+  if(r.friends.includes(userid)){
+    const n = {...r, isFriend:true,name:name,pic:pic,nposts:nposts,nfriends:nfriends}
+    res.status(200).json(n);
+  }
+  else{
+    const n = {...r, isFriend:false,name:name,pic:pic,nposts:nposts,nfriends:nfriends}
+    res.status(200).json(n);
+  }
+  
+}  
+catch (err) {
+  console.log(err);
+  res.status(500).json({ mssg: "Server error" });
+}
+})
+
+app.get('/api/getid',isAuth, async (req, res) => {
+  const id = req.session.user._id;
+  res.status(200).json({id:id});
+})
+
+app.get('/api/followersof/:id',isAuth, async (req, res) => {
+  const id = req.params.id;
+  try{
+    const resp = await User.findOne({ _id: id }).populate('friends');
+    console.log(resp.friends);
+    res.status(200).json(resp.friends);
+  }catch(err){
+    console.log(err);
+    res.status(500).json({ mssg: "Server error" });
+  }
+})
 
 // Connexion à la base de données et démarrage du serveur
 mongoose
