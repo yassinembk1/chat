@@ -12,6 +12,7 @@ const session = require("express-session");
 const bcrypt = require("bcryptjs");
 const MongoDBSession = require("connect-mongodb-session")(session);
 const cloudinary = require("./utils/Cloudinary");
+const path = require('path');
 const app = express();
 app.use(express.static('build'));
 // Middleware de traitement des fichiers
@@ -610,6 +611,10 @@ app.get('/api/followersof/:id',isAuth, async (req, res) => {
     console.log(err);
     res.status(500).json({ mssg: "Server error" });
   }
+})
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'build', 'index.html'));
 })
 
 // Connexion à la base de données et démarrage du serveur
