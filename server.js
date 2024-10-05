@@ -46,6 +46,9 @@ function isAuth(req, res, next) {
     res.redirect("/login");
   }
 }
+
+
+
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "defaultsecret",
@@ -106,6 +109,7 @@ app.post('/api/login', async (req, res) => {
     // Authentifier l'utilisateur
     req.session.user = user;
     req.session.isAuth = true;
+    const s = await User.findByIdAndUpdate(user._id, {status:"online"});
     console.log('Session ID:', req.sessionID);
 
     // Réponse de succès
@@ -296,7 +300,7 @@ app.get('/api/profile',isAuth ,async (req, res) => {
     const nfriends = r.friends.length;
     const pic = r.profilepic.url;
     
-    res.json({ nposts:nposts,nfriends:nfriends,pic:pic ,name:name});
+    res.json({ nposts:nposts,nfriends:nfriends,pic:pic ,name:name,s:r.status });
   }catch(err){
     console.log(err);
   }
@@ -304,12 +308,16 @@ app.get('/api/profile',isAuth ,async (req, res) => {
 });
 
 // Route de déconnexion
-app.get('/api/logout',isAuth ,(req, res) => {
-  req.session.destroy((err) => {
+app.get('/api/logout',isAuth ,async (req, res) => {
+  const id = req.session.user._id;
+  req.session.destroy(async(err) => {
     if (err) {
       console.log('Erreur lors de la destruction de la session :', err);
       return res.status(500).send('Erreur lors de la déconnexion');
     }
+    
+    const s = await User.findByIdAndUpdate(id, {status:"offline",lastActive:new Date()});
+
     res.clearCookie('connect.sid');
     res.status(200).json({ message: 'Deconnexion reussie' });
   });
@@ -474,8 +482,10 @@ app.get('/api/chatting/:id', isAuth, async (req, res) => {
       }
     });
 
+    const r=await User.findById(id);  // Find the user by the ID
+
     // Send the collected messages to the client
-     res.status(200).json({ you, friend });
+     res.status(200).json({ you, friend ,r});
   } catch (err) {
     console.log(err);
     res.status(500).json({ error: "An error occurred while fetching chat messages." });
@@ -581,11 +591,13 @@ app.get('/api/profile/:id', isAuth, async (req, res) => {
     const nposts = r.posts.length;
     const nfriends = r.friends.length;
     const pic = r.profilepic.url;
-    const isme = id === userid;
+    const isme = id == userid;
     const isFriend = r.friends.includes(userid);
 
+  
+    
     // Construct the response object
-    const response = { isFriend, name, pic, nposts, nfriends, isme };
+    const response = { isFriend, name, pic, nposts, nfriends, isme ,friendrequest: r.friendrequests.includes(userid),s:r.status};
 console.log(response)
     // Send the response
     res.status(200).json(response);
@@ -663,6 +675,23 @@ app.post('/api/followuser/:id', isAuth, async (req, res) => {
   } catch (error) {
     console.error("Error processing friend request:", error);
     res.status(500).json({ message: "Server error." });
+  }
+});
+
+app.get("/api/friendreq/:value", isAuth, async (req, res) => {
+  const value = req.params.value;
+  try {
+    // Assuming User is your MongoDB user model
+    const users = await User.find({ fullname: { $regex: `^${value}`, $options: 'i' } });
+    
+    if (users.length > 0) {
+      return res.status(200).json(users);
+    } else {
+      return res.status(404).json({ message: "No users found" });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
