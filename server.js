@@ -622,18 +622,19 @@ app.get('/api/myposts',isAuth, async (req, res) => {
 
 
 app.get('/api/friends',isAuth, async (req, res) => {
-  const u = req.session.user 
-  const friends= u.friends
-  const array=[]
+  const u = req.session.user;
+  const friends = u.friends;
   
   const result = await Promise.all(
     friends.map(async (friend) => {
       const user = await User.findOne({ _id: friend });
-      array.push(user);
+      return user;  // Return the user directly
     })
   );
-  //console.log(array);
-  res.status(200).json(array)
+  
+  // Send the array of users as the response
+  res.status(200).json(result);
+  
 
 });
 
@@ -660,7 +661,7 @@ app.get('/api/profile/:id', isAuth, async (req, res) => {
     
     // Construct the response object
     const response = { isFriend, name, pic, nposts, nfriends, isme ,friendrequest: r.friendrequests.includes(userid),s:r.status};
-console.log(response)
+//console.log(response)
     // Send the response
     res.status(200).json(response);
     
@@ -673,7 +674,9 @@ console.log(response)
 
 app.get('/api/getid',isAuth, async (req, res) => {
   const id = req.session.user._id;
-  res.status(200).json({id:id});
+  const user = await User.findById(id);
+
+  res.status(200).json({id:id,user:user});
 })
 
 app.get('/api/followersof/:id',isAuth, async (req, res) => {
@@ -744,6 +747,37 @@ app.post("/api/follow/:id",isAuth , async (req, res) => {
 
 
 })
+app.get("/api/viewmyposts/:id", isAuth, async (req, res) => {
+  const id = req.params.id;
+  try {
+    // Find all posts by the user using their ID
+    const posts = await Post.find({ user: id })
+      .populate('user')
+      .sort({ createdAt: -1 });
+
+    console.log(posts);
+    res.status(200).json(posts); // Return the list of posts
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ msg: "Server error" }); // Fix the spelling of 'msg'
+  }
+});
+
+app.get("/api/up/:id", isAuth, async (req, res) => {
+  const id = req.params.id;
+  console.log(id);
+  
+  // Here you would typically fetch the post from your database
+  // Example:
+  const post = await Post.findById(id);
+   if (!post) return res.status(404).json({ message: "Post not found" });
+
+   console.log(post);
+  // Return a sample response for testing
+});
+
+
+
 app.post('/api/followuser/:id', isAuth, async (req, res) => {
   const friend = req.params.id;
   const userid = req.session.user._id; // ID of the currently authenticated user
@@ -775,6 +809,32 @@ app.post('/api/followuser/:id', isAuth, async (req, res) => {
     res.status(500).json({ message: "Server error." });
   }
 });
+
+
+app.patch("/api/Unfollowuser/:id", isAuth, async (req, res) => {
+      const friend = req.params.id;
+      const me = req.session.user._id; // ID of the currently authenticated user
+
+      try {
+        // Find the user to whom the friend request is being sent
+        const userTo = await User.findOne({ _id: friend });
+        if (!userTo) {
+          return res.status(404).json({ message: "User not found." });
+        }
+        // Update the friend's document by removing the current user's ID from their friend requests
+        const updateRes = await User.updateOne({ _id: me }, { $pull: { friends: friend } });
+        const updateRes2 = await User.updateOne({ _id: friend }, { $pull: { friends: me } });
+        //console.log(updateRes);
+        // Respond with success
+        res.status(200).json({ message: "Unfollowed successfully." });
+      } catch (error) {
+        console.error("Error processing friend request:", error);
+        res.status(500).json({ message: "Server error." });
+      }
+
+
+})
+
 
 app.get("/api/friendreq/:value", isAuth, async (req, res) => {
   const value = req.params.value;
