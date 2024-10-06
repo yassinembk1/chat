@@ -190,50 +190,112 @@ app.post("/api/create",isAuth ,async (req, res) => {
 
 });
 
+// Like a post
 app.patch('/api/like/:id', isAuth, async (req, res) => {
   try {
-    const id=req.params.id;
-    console.log(id);
-    const reponse = await Post.findByIdAndUpdate(id, { $inc: { likes: 1 } }, { new: true });
-    const r= await Notifications.create({sender:req.session.user._id,receiver:reponse.user._id,post:reponse._id,type:"like",message:`${req.session.user.fullname} liked your post`});
-    //console.log(reponse);
-    if(r&&reponse)
-    {res.status(200).json(reponse);}
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
-  }
-})
+    const id = req.params.id; // The ID of the post to like
+    const liker = req.body.id; // The ID of the user liking the post
 
-app.patch('/api/unlike/:id', isAuth, async (req, res) => {
-  try {
-    const id = req.params.id;
-    console.log(id);
-    const response = await Post.findByIdAndUpdate(id, { $inc: { likes: -1 } }, { new: true });
-    res.status(200).json(response);
+    // Find the post and update it by incrementing likes and pushing the liker into the likedby array
+    const response = await Post.findByIdAndUpdate(
+      id,
+      { $inc: { likes: 1 }, $push: { likedby: liker } },
+      { new: true } // Return the updated document
+    );
+
+    if (!response) {
+      return res.status(404).json({ message: 'Post not found' });
+    }
+
+    // Only send a notification if the liker is not the owner of the post
+    if (liker !== response.user.toString()) {
+      await Notifications.create({
+        sender: req.session.user._id,
+        receiver: response.user,
+        post: response._id,
+        type: "like",
+        message: `${req.session.user.fullname} liked your post`
+      });
+    }
+
+    // Return the updated post data
+    return res.status(200).json({
+      likes: response.likes,
+      likedby: response.likedby,
+    });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    return res.status(500).json({ message: 'Server error' });
   }
 });
 
-app.post('/api/comment/:id', isAuth, async (req, res) => {  
-  const Postid = req.params.id
-  try{
+
+// Unlike a post
+app.patch('/api/unlike/:id', async (req, res) => {
+  try {
+    const { id } = req.params; // The ID of the post to unlike
+    const userId = req.body.id; // The user's ID
+
+    // Find the post by ID
+    const p = await Post.findById(id);
+   
+      const post = await Post.findByIdAndUpdate( id, { $pull: { likedby: userId }, $inc: { likes: -1 } }, { new: true } );
     
-    const response= await Comments.create({user:req.session.user._id,post:Postid,body:req.body.comment});
-    const r = await Post.findByIdAndUpdate(Postid, { $push: { comments: response._id } }, { new: true });
-    //console.log(r)
-    const n = await Notifications.create({sender:req.session.user._id,receiver:r.user,type:"comment",message:`${req.session.user.fullname} commented on your post`});
-    if(r&& response&&n){
-      res.status(200).json("success");
+
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
     }
+ 
+    res.status(200).json({
+      message: "Post unliked successfully",
+      likes: post.likes,
+      likedby: post.likedby,
+    });
+    
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Server error' });
-  } 
-})
+    res.status(500).json({ message: "Server error" });
+  }
+});
 
+app.post('/api/comment/:postId', isAuth, async (req, res) => {
+  const postId = req.params.postId; // Get the postId from URL params
+  const { userId, body } = req.body; // Extract user and body from the request body
+
+  // Validate input
+  if (!userId || !postId || !body) {
+      return res.status(400).json({ message: "User, postId, and comment body are required." });
+  }
+
+  try {
+      // Check if the post exists
+      const post = await Post.findById(postId);
+      if (!post) {
+          return res.status(404).json({ message: "Post not found." });
+      }
+
+      // Create a new comment instance
+      const comment = new Comments({
+          user: userId, // Ensure user is a valid ObjectId
+          post: postId, // Ensure postId is a valid ObjectId
+          body: body,
+      });
+
+      console.log(comment);
+      // Save the comment to the database
+      await comment.save();
+
+      // Optionally, push the comment ID into the post's comments array if you have a comments field in the Post schema
+      post.comments.push(comment._id); // Ensure your Post model has a comments field as an array
+      await post.save();
+
+      // Respond with the created comment
+      res.status(200).json(comment);
+  } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Server error." });
+  }
+});
 
 
 app.get('/api/home', isAuth, async (req, res) => {
@@ -626,10 +688,46 @@ app.get('/api/followersof/:id',isAuth, async (req, res) => {
   }
 })
 
+app.get("/api/coms/:post",isAuth, async (req, res) => {
+
+const postid = req.params.post;
+//console.log(postid);
+
+try {
+  const r = await Comments.find({ post: postid }).populate('user').sort({ createdAt: -1 })
 
 
+if(r){
+  res.status(200).json(r);
+}
+}catch(err){
+  console.log(err);
 
 
+}
+})
+
+
+app.post("/api/coms/:post",isAuth, async (req, res) => {
+  const postid = req.params.post;
+  const body = req.body.body;
+  try {
+    const id= await Post.findOne({ _id: postid });
+    const r = await Comments.create({ body: body, post: postid, user: req.session.user._id });
+    //console.log(id.user.toString() !== req.session.user._id)
+    const p= await Post.findOneAndUpdate({ _id: postid }, { $push: { comments: r._id } });
+    if (id.user.toString() !== req.session.user._id.toString()) {
+      const n =   await Notifications.create({sender: req.session.user._id,receiver: id.user,post:r._id,type:"comment",message:"commented on your post"});
+ }  
+    res.status(200).json(r);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ mssg: "Server error" }
+
+    )
+  } 
+
+})
 
 app.post("/api/follow/:id",isAuth , async (req, res) => {
   const id = req.params.id;
