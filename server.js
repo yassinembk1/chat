@@ -855,9 +855,11 @@ app.get("/api/friendreq/:value", isAuth, async (req, res) => {
 
 
 app.get('*',(req, res) => {
-  res.sendFile(path.join(__dirname, 'build', 'index.html'));
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 })
 // Connexion à la base de données et démarrage du serveur
+
+app.use(express.static(path.join(__dirname, "build")));
 mongoose
   .connect(mongoURI, {
     useNewUrlParser: true,
@@ -870,4 +872,3 @@ mongoose
     console.log(err);
   });
 
-  
